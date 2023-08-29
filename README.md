@@ -111,6 +111,12 @@ Hit URL http://localhost:8080/wildfly-artemis/remote-artemis and you will see in
 19:33:01,224 INFO  [class org.example.RemoteArtemisServletClient] (default task-1) Message 29-08-2023 19:33:01 sent to [JMSProviderName: ActiveMQ Artemis, JMSVersion: 3.1]
 ```
 
+Hit URL http://localhost:8080/wildfly-artemis/embedded-artemisand you will see in WildFly log:
+
+```log
+20:01:37,650 INFO  [class org.example.EmbeddedArtemisServletClient] (default task-1) Message 29-08-2023 20:01:37 sent to [JMSProviderName: ActiveMQ Artemis, JMSVersion: 3.1] [QueueName: SomeOtherQueue]
+```
+
 ## Connect to Artemis console 
 
 Go to http://0.0.0.0:8161/console and login with username `artemis` password `artemis`
