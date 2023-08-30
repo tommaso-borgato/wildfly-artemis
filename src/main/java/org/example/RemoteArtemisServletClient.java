@@ -24,7 +24,7 @@ import java.util.logging.Logger;
 						name = "java:/queue/SomeQueue",
 						interfaceName = "jakarta.jms.Queue",
 						destinationName = "SomeQueue",
-						properties = {"enable-amq1-prefix=false"}
+						properties = {"enable-amq1-prefix=true"}
 				)
 		}
 )
@@ -39,15 +39,33 @@ public class RemoteArtemisServletClient extends HttpServlet {
 	@Resource(lookup = "java:/queue/SomeQueue")
 	private Queue queue;
 
+	// /subsystem=messaging-activemq/external-jms-queue=myExternalQueue1:add(entries=[java:jboss/exported/jms/queue/myExternalQueue1], enable-amq1-prefix=false)
+	@Resource(lookup = "java:jboss/exported/jms/queue/myExternalQueue1")
+	private Queue queue1;
+
+	// /subsystem=messaging-activemq/external-jms-queue=myExternalQueue2:add(entries=[java:jboss/exported/jms/queue/myExternalQueue2], enable-amq1-prefix=true)
+	@Resource(lookup = "java:jboss/exported/jms/queue/myExternalQueue2")
+	private Queue queue2;
+
 	@Override
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 		resp.setContentType("text/html");
+		String pattern = "dd-MM-yyyy kk:mm:ss";
+		SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
+		String message = "Message " + simpleDateFormat.format(new Date());
 		try (PrintWriter out = resp.getWriter()) {
-			String pattern = "dd-MM-yyyy kk:mm:ss";
-			SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
-			String message = "Message " + simpleDateFormat.format(new Date());
-			context.createProducer().send(queue, message);
-			LOGGER.info(message + " sent to " + prettyPrint(context) + " " + prettyPrint(queue));
+			String queueName = req.getParameter("queue");
+			LOGGER.info("Queue Name: " + queueName);
+			if (queueName != null && "1".equalsIgnoreCase(queueName)) {
+				context.createProducer().send(queue1, message);
+				LOGGER.info(message + " sent to " + prettyPrint(context) + " " + prettyPrint(queue1));
+			} else if (queueName != null && "2".equalsIgnoreCase(queueName)) {
+				context.createProducer().send(queue2, message);
+				LOGGER.info(message + " sent to " + prettyPrint(context) + " " + prettyPrint(queue2));
+			} else {
+				context.createProducer().send(queue, message);
+				LOGGER.info(message + " sent to " + prettyPrint(context) + " " + prettyPrint(queue));
+			}
 			out.write(message);
 		}
 	}

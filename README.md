@@ -31,20 +31,23 @@ WildFly statically added prefixes in the Artemis client (enable1xPrefixes=true) 
 
 ## Create Docker image
 
+We are using WildFly 30 which is compatible with Artemis 2.26.0:
+
 ```shell
+mkdir -p ~/projects
 cd ~/projects
 git clone https://github.com/apache/activemq-artemis
 cd activemq-artemis
 git status
 git fetch --all --tags 
-git checkout tags/2.30.0 -b localversion-2.30.0
+git checkout tags/2.26.0 -b localversion-2.26.0
 cd artemis-distribution
-mvn  -Dskip.test=true install
-cd artemis-distribution/target/apache-artemis-2.30.0-bin/apache-artemis-2.30.0/
-pwd
+mvn -Dskip.test=true install
+cd ./target/apache-artemis-2.26.0-bin/apache-artemis-2.26.0/
+LOCAL_DIST_PATH=$PWD
 cd ~/projects/activemq-artemis/artemis-docker/
-./prepare-docker.sh --from-local-dist --local-dist-path /home/tborgato/projects/activemq-artemis/artemis-distribution/target/apache-artemis-2.30.0-bin/apache-artemis-2.30.0
-cd /home/tborgato/projects/activemq-artemis/artemis-distribution/target/apache-artemis-2.30.0-bin/apache-artemis-2.30.0
+./prepare-docker.sh --from-local-dist --local-dist-path $LOCAL_DIST_PATH
+cd $LOCAL_DIST_PATH
 podman build -f ./docker/Dockerfile-centos7-11 -t artemis-centos .
 ```
 
@@ -54,7 +57,7 @@ podman build -f ./docker/Dockerfile-centos7-11 -t artemis-centos .
 podman run --rm -it --network=host -e AMQ_USER=artemis -e AMQ_PASSWORD=artemis --name artemis-centos artemis-centos
 ```
 
-Or:
+Or, in case you just want to expose the acceptor and the console:
 
 ```shell
 podman run --rm -it -p 61616:61616 -p 8161:8161 --name artemis-centos artemis-centos
@@ -67,9 +70,10 @@ Console: http://0.0.0.0:8161/console artemis/artemis
 ```shell
 podman exec -it artemis-centos /bin/bash
 cat ./etc/broker.xml
+...
 ```
 
-We have just `tcp://0.0.0.0:5445?anycastPrefix=jms.queue.;multicastPrefix=jms.topic.` for HornetQ:
+In the output, note there is just `tcp://0.0.0.0:5445?anycastPrefix=jms.queue.;multicastPrefix=jms.topic.` for HornetQ which is running in compatibility mode:
 
 ```
 <!-- Acceptor for every supported protocol -->
@@ -89,6 +93,12 @@ We have just `tcp://0.0.0.0:5445?anycastPrefix=jms.queue.;multicastPrefix=jms.to
 
 ```shell
 /tmp/wildfly-30.0.0.Beta1-202308192044-7e816de9/server/bin/standalone.sh --server-config=standalone-full.xml
+```
+
+## Add admin user to WF
+
+```shell
+./wildfly-30.0.0.Beta1-202308192044-7e816de9/server/bin/add-user.sh admin admin
 ```
 
 ## Connect WF to AMQ
@@ -159,3 +169,37 @@ Instead, `enable-amq1-prefix` is NOT present on the `pooled-connection-factory` 
 }  }
 ```
 
+## Create a container image running in compatibility mode
+
+Before building the container image, modify the following files:
+- artemis-distribution/target/apache-artemis-2.26.0-bin/apache-artemis-2.26.0/docker/docker-run.sh
+- artemis-distribution/target/apache-artemis-2.26.0-bin/apache-artemis-2.26.0/docker/Dockerfile-centos7-11
+
+In `docker-run.sh` add the following at line 43:
+
+```shell
+    if $COMPATIBILITY_MODE; then
+      sed -i 's/0.0.0.0:61616[?]/0.0.0.0:61616?anycastPrefix=jms.queue.;multicastPrefix=jms.topic.;/g' ./etc/broker.xml
+      echo "======================================================================"
+      echo "===================== COMPATIBILITY MODE ============================="
+      echo "======================================================================"
+    fi
+```
+
+In `Dockerfile-centos7-11` add the following at line 30:
+
+```shell
+ENV COMPATIBILITY_MODE false
+```
+
+and finally proceed with:
+
+```shell
+podman build -f ./docker/Dockerfile-centos7-11 -t artemis-centos .
+```
+
+when you start the container you can use the new emv variable `COMPATIBILITY_MODE`:
+
+```shell
+podman run --rm -it --network=host -e AMQ_USER=artemis -e AMQ_PASSWORD=artemis -e COMPATIBILITY_MODE=true --name artemis-centos artemis-centos
+```
